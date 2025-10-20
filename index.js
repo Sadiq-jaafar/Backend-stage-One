@@ -16,7 +16,7 @@ app.use(cors());
 
 
 app.get("/", (req ,res)=>{
-    res.send(" String Analyser Service Backend stage One is running");
+    res.send(" String Analyser Service Backend stage One is runningg");
 })
 
 app.use("/strings", stringRoutes);
