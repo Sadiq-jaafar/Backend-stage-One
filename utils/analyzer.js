@@ -1,17 +1,33 @@
+// utils/analyzer.js
 import crypto from "crypto";
 
-export function analyzeString(value) {
-  const trimmed = value.trim();
-  const length = trimmed.length;
-  const normalized = trimmed.toLowerCase().replace(/\s+/g, "");
+/**
+ * Analyze a string and return required properties.
+ * - length: number of characters (includes spaces)
+ * - is_palindrome: case-insensitive, ignores non-alphanumeric chars
+ * - unique_characters: count of distinct characters (case-sensitive)
+ * - word_count: words separated by whitespace
+ * - sha256_hash: hex digest of the original value (no trimming)
+ * - character_frequency_map: map each character (exact char) to counts
+ */
+export const analyzeString = (value) => {
+  // value is used exactly as provided for length, frequency, and hashing
+  const length = value.length;
+
+  // Palindrome: normalize by removing non-alphanumerics and lowercasing
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, "");
   const is_palindrome = normalized === normalized.split("").reverse().join("");
-  const unique_characters = new Set(trimmed).size;
-  const word_count = trimmed.split(/\s+/).filter(Boolean).length;
-  const sha256_hash = crypto.createHash("sha256").update(trimmed).digest("hex");
+
+  // Unique characters (based on exact characters present)
+  const unique_characters = new Set(value).size;
+
+  const word_count = value.trim() === "" ? 0 : value.trim().split(/\s+/).length;
+
+  const sha256_hash = crypto.createHash("sha256").update(value).digest("hex");
 
   const character_frequency_map = {};
-  for (let char of trimmed) {
-    character_frequency_map[char] = (character_frequency_map[char] || 0) + 1;
+  for (const ch of value) {
+    character_frequency_map[ch] = (character_frequency_map[ch] || 0) + 1;
   }
 
   return {
@@ -22,4 +38,4 @@ export function analyzeString(value) {
     sha256_hash,
     character_frequency_map,
   };
-}
+};

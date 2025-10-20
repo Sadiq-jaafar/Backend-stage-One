@@ -1,8 +1,7 @@
-
+// controllers/stringController.js
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import crypto from "crypto";
 import { analyzeString } from "../utils/analyzer.js";
 import { applyFilters } from "../utils/filters.js";
 
@@ -11,38 +10,32 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, "../data");
 const DATA_FILE = path.join(DATA_DIR, "strings.json");
 
-
+// ensure data file
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "[]", "utf-8");
 
-
 const loadStrings = () => {
-  const raw = fs.readFileSync(DATA_FILE, "utf-8");
+  const raw = fs.readFileSync(DATA_FILE, "utf-8") || "[]";
   try {
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) {
-    
+    return JSON.parse(raw);
+  } catch {
     return [];
   }
 };
 
-const saveStrings = (arr) => {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(arr, null, 2), "utf-8");
-};
+const saveStrings = (arr) => fs.writeFileSync(DATA_FILE, JSON.stringify(arr, null, 2), "utf-8");
 
-
+// POST /strings
 export const createString = (req, res, next) => {
   try {
-    const { value } = req.body;
+    const { value } = req.body; // validateStringInput ensures exists and is string
 
     const properties = analyzeString(value);
-
     const id = properties.sha256_hash;
 
     const strings = loadStrings();
 
     if (strings.some((s) => s.id === id)) {
-      // Duplicate -> 409 Conflict
       return res.status(409).json({ error: "String already exists in the system" });
     }
 
@@ -56,10 +49,8 @@ export const createString = (req, res, next) => {
     strings.push(entry);
     saveStrings(strings);
 
-    // Successful creation -> 201
     return res.status(201).json(entry);
   } catch (err) {
-    // If thrown typed error with statusCode, use it
     return next(err);
   }
 };
@@ -71,7 +62,7 @@ export const getAllStrings = (req, res, next) => {
     const result = applyFilters(strings, req.query);
     return res.status(200).json(result);
   } catch (err) {
-    return next(err);
+    return  res.status(400)
   }
 };
 
@@ -81,9 +72,7 @@ export const getStringByValue = (req, res, next) => {
     const { string_value } = req.params;
     const strings = loadStrings();
     const found = strings.find((s) => s.value === string_value);
-    if (!found) {
-      return res.status(404).json({ error: "String not found" });
-    }
+    if (!found) return res.status(404).json({ error: "String not found" });
     return res.status(200).json(found);
   } catch (err) {
     return next(err);
@@ -96,9 +85,7 @@ export const deleteString = (req, res, next) => {
     const { string_value } = req.params;
     const strings = loadStrings();
     const idx = strings.findIndex((s) => s.value === string_value);
-    if (idx === -1) {
-      return res.status(404).json({ error: "String not found" });
-    }
+    if (idx === -1) return res.status(404).json({ error: "String not found" });
     strings.splice(idx, 1);
     saveStrings(strings);
     return res.status(204).send();
@@ -111,12 +98,10 @@ export const deleteString = (req, res, next) => {
 export const filterByNaturalLanguage = (req, res, next) => {
   try {
     const q = req.query.query;
-    if (!q || typeof q !== "string") {
-      return res.status(400).json({ error: "Missing 'query' parameter" });
-    }
+    if (!q || typeof q !== "string") return res.status(400).json({ error: "Missing 'query' parameter" });
 
-    const parsed = parseNaturalLanguage(q.toLowerCase());
-    // applyFilters expects query-like object; pass parsed
+    const parsed = parseNaturalLanguage(q.toLowerCase()); // returns an object like { word_count:1, is_palindrome:true, ... }
+
     const strings = loadStrings();
     const result = applyFilters(strings, parsed);
 
@@ -129,56 +114,50 @@ export const filterByNaturalLanguage = (req, res, next) => {
       },
     });
   } catch (err) {
+    // If parseNaturalLanguage created typed error, let middleware handle
     return next(err);
   }
 };
 
-
+/* natural language heuristics */
 const parseNaturalLanguage = (text) => {
   const filters = {};
 
-  // palindrome keywords
-  if (/\bpalindromic\b/.test(text) || /\bpalindrome\b/.test(text)) {
-    filters.is_palindrome = true;
-  }
+  if (/\bpalindromic\b/.test(text) || /\bpalindrome\b/.test(text)) filters.is_palindrome = true;
+  if (/\bsingle word\b/.test(text) || /\bone word\b/.test(text)) filters.word_count = 1;
 
-  // single word / one word
-  if (/\bsingle word\b/.test(text) || /\bone word\b/.test(text)) {
-    filters.word_count = 1;
-  }
+  // "strings longer than 10 characters" => min_length = 11
+  const mLonger = text.match(/longer than (\d+)/);
+  if (mLonger) filters.min_length = parseInt(mLonger[1], 10) + 1;
 
-  // longer than N -> min_length = N + 1
-  const longer = text.match(/longer than (\d+)/);
-  if (longer) {
-    const n = parseInt(longer[1], 10);
-    if (!Number.isNaN(n)) filters.min_length = n + 1;
-  }
-
-  // longer than or equal to N -> min_length = N
-  const longerEq = text.match(/at least (\d+)|longer than or equal to (\d+)/);
-  if (longerEq) {
-    const n = parseInt((longerEq[1] || longerEq[2]), 10);
+  // "strings longer than or equal to 10" or "at least 10" => min_length = 10
+  const mLongerEq = text.match(/longer than or equal to (\d+)|at least (\d+)/);
+  if (mLongerEq) {
+    const n = parseInt(mLongerEq[1] || mLongerEq[2], 10);
     if (!Number.isNaN(n)) filters.min_length = n;
   }
 
-  // shorter than N -> max_length = N - 1
-  const shorter = text.match(/shorter than (\d+)/);
-  if (shorter) {
-    const n = parseInt(shorter[1], 10);
-    if (!Number.isNaN(n)) filters.max_length = n - 1;
-  }
+  // "shorter than 10 characters" => max_length = 9
+  const mShorter = text.match(/shorter than (\d+)/);
+  if (mShorter) filters.max_length = parseInt(mShorter[1], 10) - 1;
 
-  // Strings containing "letter x" or "containing the letter x" or "containing x"
-  const containsLetter = text.match(/containing the letter (\w)/) || text.match(/containing (\w)/);
-  if (containsLetter) {
-    filters.contains_character = containsLetter[1];
-  }
+  // containing the letter x OR containing x
+  const mContains = text.match(/containing the letter (\w)/) || text.match(/containing (\w)/);
+  if (mContains) filters.contains_character = mContains[1];
 
-  // If we couldn't parse anything, throw 400
   if (Object.keys(filters).length === 0) {
     const err = new Error("Unable to parse natural language query");
     err.statusCode = 400;
     throw err;
+  }
+
+  // Validate: conflicting filters example (min>max)
+  if (filters.min_length !== undefined && filters.max_length !== undefined) {
+    if (filters.min_length > filters.max_length) {
+      const err = new Error("Parsed filters conflict (min_length > max_length)");
+      err.statusCode = 422;
+      throw err;
+    }
   }
 
   return filters;
