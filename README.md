@@ -29,8 +29,8 @@ string-analyzer/
 
  # Installation & Setup
 1️⃣ Clone the repository
-git clone https://github.com/yourusername/string-analyzer-api.git
-cd string-analyzer-api
+git clone https://github.com/Sadiq-jaafar/Backend-stage-One.git
+cd Backend-stage-One
 
 2️⃣ Install dependencies
 npm install
