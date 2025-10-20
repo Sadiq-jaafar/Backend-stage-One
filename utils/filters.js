@@ -1,83 +1,84 @@
 
 export const applyFilters = (strings, query) => {
-  let filtered = [...strings]; 
+  let filtered = [...strings];
 
-  const {
-    is_palindrome,
-    min_length,
-    max_length,
-    word_count,
-    contains_character,
-  } = query;
+  // Parse and normalize incoming query parameters to typed values where possible
+  const parsed = {};
 
-  try {
-    if (is_palindrome !== undefined) {
-      const boolValue =
-        typeof is_palindrome === "boolean"
-          ? is_palindrome
-          : is_palindrome.toString().toLowerCase() === "true";
-
-      filtered = filtered.filter(
-        (item) => item.properties.is_palindrome === boolValue
-      );
-    }
-
-    if (min_length !== undefined) {
-      const min = parseInt(min_length, 10);
-      if (isNaN(min)) throw new Error("Invalid min_length parameter");
-      filtered = filtered.filter((item) => item.properties.length >= min);
-    }
-
-    if (max_length !== undefined) {
-      const max = parseInt(max_length, 10);
-      if (isNaN(max)) throw new Error("Invalid max_length parameter");
-      filtered = filtered.filter((item) => item.properties.length <= max);
-    }
-
-    if (word_count !== undefined) {
-      const count = parseInt(word_count, 10);
-      if (isNaN(count)) throw new Error("Invalid word_count parameter");
-      filtered = filtered.filter(
-        (item) => item.properties.word_count === count
-      );
-    }
-
-    if (contains_character !== undefined) {
-      if (typeof contains_character !== "string") {
-        throw new Error("Invalid contains_character parameter");
-      }
-      const char = contains_character.toLowerCase();
-      filtered = filtered.filter((item) =>
-        item.value.toLowerCase().includes(char)
-      );
-    }
-
-    return {
-      data: filtered,
-      count: filtered.length,
-      filters_applied: cleanAppliedFilters(query),
-    };
-  } catch (error) {
-    const err = new Error(error.message);
-    err.statusCode = 400;
-    throw err;
+  if (query.is_palindrome !== undefined) {
+    const raw = query.is_palindrome;
+    parsed.is_palindrome =
+      typeof raw === "boolean" ? raw : raw.toString().toLowerCase() === "true";
   }
+
+  if (query.min_length !== undefined) {
+    const n = parseInt(query.min_length, 10);
+    if (Number.isNaN(n)) throwTypedError("min_length must be an integer");
+    parsed.min_length = n;
+  }
+
+  if (query.max_length !== undefined) {
+    const n = parseInt(query.max_length, 10);
+    if (Number.isNaN(n)) throwTypedError("max_length must be an integer");
+    parsed.max_length = n;
+  }
+
+  if (query.word_count !== undefined) {
+    const n = parseInt(query.word_count, 10);
+    if (Number.isNaN(n)) throwTypedError("word_count must be an integer");
+    parsed.word_count = n;
+  }
+
+  if (query.contains_character !== undefined) {
+    if (typeof query.contains_character !== "string") {
+      throwTypedError("contains_character must be a string");
+    }
+    parsed.contains_character = query.contains_character.toLowerCase();
+  }
+
+  // Apply filters
+  if (parsed.is_palindrome !== undefined) {
+    filtered = filtered.filter((item) => item.properties.is_palindrome === parsed.is_palindrome);
+  }
+
+  if (parsed.min_length !== undefined) {
+    filtered = filtered.filter((item) => item.properties.length >= parsed.min_length);
+  }
+
+  if (parsed.max_length !== undefined) {
+    filtered = filtered.filter((item) => item.properties.length <= parsed.max_length);
+  }
+
+  if (parsed.word_count !== undefined) {
+    filtered = filtered.filter((item) => item.properties.word_count === parsed.word_count);
+  }
+
+  if (parsed.contains_character !== undefined) {
+    filtered = filtered.filter((item) =>
+      item.value.toLowerCase().includes(parsed.contains_character)
+    );
+  }
+
+  return {
+    data: filtered,
+    count: filtered.length,
+    filters_applied: buildAppliedFilters(parsed),
+  };
 };
 
+const throwTypedError = (message) => {
+  const err = new Error(message);
+  err.statusCode = 400;
+  throw err;
+};
 
-const cleanAppliedFilters = (query) => {
-  const validKeys = [
-    "is_palindrome",
-    "min_length",
-    "max_length",
-    "word_count",
-    "contains_character",
-  ];
+const buildAppliedFilters = (parsed) => {
+  // Return the typed filters as they were applied
   const applied = {};
-  for (const key of validKeys) {
-    if (query[key] !== undefined) {
-      applied[key] = query[key];
-    }
-  }
+  if (parsed.is_palindrome !== undefined) applied.is_palindrome = parsed.is_palindrome;
+  if (parsed.min_length !== undefined) applied.min_length = parsed.min_length;
+  if (parsed.max_length !== undefined) applied.max_length = parsed.max_length;
+  if (parsed.word_count !== undefined) applied.word_count = parsed.word_count;
+  if (parsed.contains_character !== undefined) applied.contains_character = parsed.contains_character;
   return applied;
 };
