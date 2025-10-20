@@ -36,7 +36,7 @@ const app = express();
 app.use(express.json()); // <--- IMPORTANT: parse JSON bodies
 app.use(cors());
 
-app.get("/", (req, res) => res.send("String Analyzer Service is runningggg"));
+app.get("/", (req, res) => res.send("String Analyzer Service is running"));
 
 app.use("/strings", stringRoutes);
 
